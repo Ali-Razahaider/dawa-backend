@@ -1,7 +1,7 @@
-from fastapi import FastAPI
-from schemas import UserInput, Response
+from fastapi import FastAPI, File, Form, UploadFile
+from schemas import PrescriptionCreateResponse
 from contextlib import asynccontextmanager
-from database import get_db, AsyncSession, Base, engine
+from database import Base, engine
 
 
 @asynccontextmanager
@@ -20,6 +20,17 @@ def home():
     return "Hello!!"
 
 
-@app.post("/prescription", response_model=Response)
-def create_prescription(prescription: UserInput):
-    pass
+@app.post("/prescription", response_model=PrescriptionCreateResponse)
+async def create_prescription(
+    image: UploadFile = File(...),
+    caption: str | None = Form(default=None),
+):
+    # Contract-only response for now. ImageKit upload and Gemini analysis
+    # will be added in the next implementation steps.
+    return PrescriptionCreateResponse(
+        id=0,
+        image_url="pending-imagekit-upload",
+        caption=caption,
+        medicines=[],
+        warnings=["Contract ready: upload and analysis not implemented yet."],
+    )
