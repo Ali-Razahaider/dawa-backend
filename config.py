@@ -1,6 +1,3 @@
-from email.mime import image
-
-from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -11,6 +8,7 @@ class Settings(BaseSettings):
     imagekit_url_endpoint: str
     imagekit_public_key: str
     gemini_api_key: str
+    openrouter_api_key: str
 
 
 settings = Settings()  # type:ignore
