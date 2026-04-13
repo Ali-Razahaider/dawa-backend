@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     imagekit_private_key: str
     imagekit_url_endpoint: str
     imagekit_public_key: str
+    gemini_api_key: str
 
 
 settings = Settings()  # type:ignore
