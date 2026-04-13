@@ -4,6 +4,8 @@ from contextlib import asynccontextmanager
 from database import Base, engine
 from services.imagekit_service import upload_file
 
+from services.gemini_service import generate_prescription
+
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
@@ -21,7 +23,7 @@ def home():
     return "Hello!!"
 
 
-@app.post("/prescription", response_model=Response)
+@app.post("/prescription")
 async def create_prescription(
     image: UploadFile = File(...),
     caption: str | None = Form(default=None),
@@ -34,10 +36,6 @@ async def create_prescription(
         file_name=image.filename or "prescription.jpg",
     )
 
-    return Response(
-        id=0,
-        image_url=image_url,
-        caption=caption,
-        medicines=[],
-        warnings=["Gemini analysis will be added next."],
-    )
+    response = await generate_prescription(image_url=image_url)
+
+    return response
