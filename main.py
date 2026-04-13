@@ -2,6 +2,7 @@ from fastapi import FastAPI, File, Form, UploadFile
 from schemas import Response
 from contextlib import asynccontextmanager
 from database import Base, engine
+from services.imagekit_service import upload_file
 
 
 @asynccontextmanager
@@ -25,10 +26,18 @@ async def create_prescription(
     image: UploadFile = File(...),
     caption: str | None = Form(default=None),
 ):
+
+    file_bytes = await image.read()
+
+    image_url = await upload_file(
+        file_bytes=file_bytes,
+        file_name=image.filename or "prescription.jpg",
+    )
+
     return Response(
         id=0,
-        image_url="pending-imagekit-upload",
+        image_url=image_url,
         caption=caption,
         medicines=[],
-        warnings=["Image upload and Gemini analysis will be added next."],
+        warnings=["Gemini analysis will be added next."],
     )
