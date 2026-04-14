@@ -1,10 +1,10 @@
-from fastapi import FastAPI, File, Form, UploadFile
-from schemas import Response
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from contextlib import asynccontextmanager
 from database import Base, engine
 from services.imagekit_service import upload_file
-
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from services.gemini_service import generate_prescription
+from fastapi.responses import JSONResponse
 
 
 @asynccontextmanager
@@ -39,3 +39,21 @@ async def create_prescription(
     response = await generate_prescription(image_url=image_url)
 
     return response
+
+
+@app.exception_handler(StarletteHTTPException)
+def general_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    message = (
+        exc.detail
+        if exc.detail
+        else "An unexpected error occurred. Please try again later."
+    )
+    if request.url.path.startswith("/prescription"):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": message},
+        )
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"detail": "Resource Not Found"},
+    )
