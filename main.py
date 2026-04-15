@@ -12,6 +12,8 @@ from starlette.middleware.base import BaseHTTPMiddleware
 requests_counts = {}
 RATE_LIMIT = 1
 TIME_WINDOW = 60  # Max 1 request per minute
+ALLOWED_IMAGE_TYPES = {"image/jpeg", "image/png", "image/webp"}
+MAX_UPLOAD_SIZE_BYTES = 5 * 1024 * 1024
 
 
 @asynccontextmanager
@@ -23,6 +25,26 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI()
+
+
+def validate_prescription_image(image: UploadFile, file_bytes: bytes) -> None:
+    if not image.filename:
+        raise HTTPException(status_code=400, detail="Image filename is required.")
+
+    if image.content_type not in ALLOWED_IMAGE_TYPES:
+        raise HTTPException(
+            status_code=415,
+            detail="Only JPEG, PNG, and WEBP images are supported.",
+        )
+
+    if not file_bytes:
+        raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+
+    if len(file_bytes) > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Image size must be 5 MB or less.",
+        )
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -60,10 +82,11 @@ def home():
 @app.post("/prescription")
 async def create_prescription(
     image: UploadFile = File(...),
-    caption: str | None = Form(default=None),
+    caption: str | None = Form(default=None, max_length=300),
 ):
 
     file_bytes = await image.read()
+    validate_prescription_image(image=image, file_bytes=file_bytes)
 
     image_url = await upload_file(
         file_bytes=file_bytes,
