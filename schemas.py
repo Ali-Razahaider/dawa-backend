@@ -13,13 +13,11 @@ class MedicineItem(BaseModel):
     raw_line: str | None = Field(default=None, max_length=300)
 
 
-class PrescriptionCreateResponse(BaseModel):
-    id: int
-    image_url: str
-    caption: str | None = None
+class PrescriptionExtractionResponse(BaseModel):
     medicines: list[MedicineItem] = Field(default_factory=list)
-    warnings: list[str] = Field(default_factory=list)
 
 
-class Response(PrescriptionCreateResponse):
-    pass
+class ApiErrorResponse(BaseModel):
+    code: str = Field(min_length=1, max_length=100)
+    message: str = Field(min_length=1, max_length=300)
+    details: dict[str, str | int | float | bool | None] | None = None
