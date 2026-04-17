@@ -3,11 +3,12 @@ from config import settings
 from google.genai import types
 import requests
 import json
+from schemas import ExtractedMedicines, MedicineItem
 
 client = genai.Client(api_key=settings.gemini_api_key)
 
 
-async def generate_prescription(image_url: str):
+async def generate_prescription(image_url: str) -> ExtractedMedicines:
     image_path = image_url
     image_bytes = requests.get(image_path).content
     image = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
@@ -40,4 +41,20 @@ Return exactly this format:
         model="gemini-3-flash-preview", contents=[prompt, image]
     )
 
-    return json.loads(response.text or "")
+    raw_response = json.loads(response.text or "{}")
+    medicines_data = raw_response.get("medicines", [])
+
+    # Build MedicineItem objects from raw data
+    medicines = []
+    for medicine_dict in medicines_data:
+        medicine = MedicineItem(
+            name=medicine_dict.get("name", ""),
+            dosage=medicine_dict.get("dosage"),
+            frequency=medicine_dict.get("frequency"),
+            duration=medicine_dict.get("duration"),
+            confidence=medicine_dict.get("confidence"),
+            raw_line=medicine_dict.get("raw_line"),
+        )
+        medicines.append(medicine)
+
+    return ExtractedMedicines(medicines=medicines)

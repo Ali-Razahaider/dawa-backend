@@ -1,15 +1,15 @@
-import json
 from contextlib import asynccontextmanager
 from time import time
+from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from database import Base, engine, get_db
 from models import Prescription
+from schemas import ExtractedMedicines
 from services.imagekit_service import upload_file
 from services.gemini_service import generate_prescription
 
@@ -84,10 +84,10 @@ def home():
     return "Hello!!"
 
 
-@app.post("/prescription")
+@app.post("/prescription", response_model=ExtractedMedicines)
 async def create_prescription(
+    db: Annotated[AsyncSession, Depends(get_db)],
     image: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db),
 ):
 
     file_bytes = await image.read()
@@ -98,17 +98,17 @@ async def create_prescription(
         file_name=image.filename or "prescription.jpg",
     )
 
-    response = await generate_prescription(image_url=image_url)
+    extracted_medicines = await generate_prescription(image_url=image_url)
 
     prescription = Prescription(
         image_url=image_url,
-        gemini_response=json.dumps(response),
+        gemini_response=extracted_medicines.model_dump_json(),
     )
     db.add(prescription)
     await db.commit()
     await db.refresh(prescription)
 
-    return response
+    return extracted_medicines
 
 
 @app.exception_handler(StarletteHTTPException)
