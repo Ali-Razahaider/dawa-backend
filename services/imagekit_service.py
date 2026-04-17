@@ -5,7 +5,6 @@ from images import imagekit
 async def upload_file(
     file_bytes: bytes,
     file_name: str,
-    folder: str = "/prescriptions",
 ) -> str:
     try:
         response = imagekit.files.upload(

@@ -1,12 +1,17 @@
-from fastapi import FastAPI, File, Form, Request, UploadFile, HTTPException
+import json
 from contextlib import asynccontextmanager
-from database import Base, engine
-from services.imagekit_service import upload_file
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from services.gemini_service import generate_prescription
-from fastapi.responses import JSONResponse
 from time import time
+
+from fastapi import Depends, FastAPI, File, Request, UploadFile, HTTPException
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
+from database import Base, engine, get_db
+from models import Prescription
+from services.imagekit_service import upload_file
+from services.gemini_service import generate_prescription
 
 
 requests_counts = {}
@@ -24,7 +29,7 @@ async def lifespan(_app: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI()
+app = FastAPI(lifespan=lifespan)
 
 
 def validate_prescription_image(image: UploadFile, file_bytes: bytes) -> None:
@@ -82,7 +87,7 @@ def home():
 @app.post("/prescription")
 async def create_prescription(
     image: UploadFile = File(...),
-    caption: str | None = Form(default=None, max_length=300),
+    db: AsyncSession = Depends(get_db),
 ):
 
     file_bytes = await image.read()
@@ -94,6 +99,14 @@ async def create_prescription(
     )
 
     response = await generate_prescription(image_url=image_url)
+
+    prescription = Prescription(
+        image_url=image_url,
+        gemini_response=json.dumps(response),
+    )
+    db.add(prescription)
+    await db.commit()
+    await db.refresh(prescription)
 
     return response
 
