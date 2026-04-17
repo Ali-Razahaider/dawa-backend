@@ -1,15 +1,17 @@
 from contextlib import asynccontextmanager
+import json
 from time import time
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile, HTTPException
 from fastapi.responses import JSONResponse
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.middleware.base import BaseHTTPMiddleware
 from database import Base, engine, get_db
 from models import Prescription
-from schemas import ExtractedMedicines
+from schemas import ExtractedMedicines, PrescriptionRecord, PrescriptionsListResponse
 from services.imagekit_service import upload_file
 from services.gemini_service import generate_prescription
 
@@ -109,6 +111,36 @@ async def create_prescription(
     await db.refresh(prescription)
 
     return extracted_medicines
+
+
+@app.get("/prescriptions", response_model=PrescriptionsListResponse)
+async def list_prescriptions(
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    result = await db.execute(
+        select(Prescription).order_by(Prescription.created_at.desc())
+    )
+    rows = result.scalars().all()
+
+    records: list[PrescriptionRecord] = []
+    for row in rows:
+        payload = {"medicines": []}
+        if row.gemini_response:
+            try:
+                payload = json.loads(row.gemini_response)
+            except json.JSONDecodeError:
+                payload = {"medicines": []}
+
+        records.append(
+            PrescriptionRecord(
+                id=row.id,
+                image_url=row.image_url,
+                extracted_medicines=ExtractedMedicines(**payload),
+                created_at=row.created_at,
+            )
+        )
+
+    return PrescriptionsListResponse(prescriptions=records)
 
 
 @app.exception_handler(StarletteHTTPException)

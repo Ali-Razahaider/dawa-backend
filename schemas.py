@@ -1,4 +1,5 @@
 from pydantic import BaseModel, Field
+from datetime import datetime
 
 
 class UserInput(BaseModel):
@@ -17,6 +18,17 @@ class MedicineItem(BaseModel):
 
 class ExtractedMedicines(BaseModel):
     medicines: list[MedicineItem] = Field(default_factory=list)
+
+
+class PrescriptionRecord(BaseModel):
+    id: int
+    image_url: str
+    extracted_medicines: ExtractedMedicines
+    created_at: datetime
+
+
+class PrescriptionsListResponse(BaseModel):
+    prescriptions: list[PrescriptionRecord] = Field(default_factory=list)
 
 
 class ApiErrorResponse(BaseModel):
