@@ -1,8 +1,5 @@
-import logging
+from fastapi import HTTPException
 from images import imagekit
-
-
-logger = logging.getLogger(__name__)
 
 
 async def upload_file(
@@ -10,12 +7,23 @@ async def upload_file(
     file_name: str,
     folder: str = "/prescriptions",
 ) -> str:
-    response = imagekit.files.upload(
-        file=file_bytes,
-        file_name=file_name,
-    )
+    try:
+        response = imagekit.files.upload(
+            file=file_bytes,
+            file_name=file_name,
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail="Image upload service is unavailable right now.",
+        )
 
     file_url = response.url or ""
-    logger.info(f"Uploaded {file_name}: {file_url}")
+
+    if not file_url:
+        raise HTTPException(
+            status_code=502,
+            detail="Image upload failed. Please try again.",
+        )
 
     return file_url
