@@ -9,11 +9,13 @@ class UserInput(BaseModel):
 class MedicineItem(BaseModel):
     name: str = Field(min_length=1, max_length=120)
     dosage: str | None = Field(default=None, max_length=120)
+    frequency: str | None = Field(default=None, max_length=120)
+    duration: str | None = Field(default=None, max_length=120)
     confidence: float | None = Field(default=None, ge=0.0, le=1.0)
     raw_line: str | None = Field(default=None, max_length=300)
 
 
-class PrescriptionExtractionResponse(BaseModel):
+class ExtractedMedicines(BaseModel):
     medicines: list[MedicineItem] = Field(default_factory=list)
 
 
