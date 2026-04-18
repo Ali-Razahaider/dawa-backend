@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 import json
+import asyncio
 from time import time
 from typing import Annotated
 
@@ -116,12 +117,14 @@ async def create_prescription(
     file_bytes = await image.read()
     validate_prescription_image(image=image, file_bytes=file_bytes)
 
-    image_url = await upload_file(
-        file_bytes=file_bytes,
-        file_name=image.filename or "prescription.jpg",
+    # Run upload and analysis in parallel
+    image_url, extracted_medicines = await asyncio.gather(
+        upload_file(
+            file_bytes=file_bytes,
+            file_name=image.filename or "prescription.jpg",
+        ),
+        generate_prescription(image_bytes=file_bytes)
     )
-
-    extracted_medicines = await generate_prescription(image_url=image_url)
 
     prescription = Prescription(
         image_url=image_url,

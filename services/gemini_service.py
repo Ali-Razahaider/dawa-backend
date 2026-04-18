@@ -1,60 +1,38 @@
 from google import genai
 from config import settings
 from google.genai import types
-import requests
 import json
 from schemas import ExtractedMedicines, MedicineItem
 
 client = genai.Client(api_key=settings.gemini_api_key)
 
 
-async def generate_prescription(image_url: str) -> ExtractedMedicines:
-    image_path = image_url
-    image_bytes = requests.get(image_path).content
+async def generate_prescription(image_bytes: bytes) -> ExtractedMedicines:
     image = types.Part.from_bytes(data=image_bytes, mime_type="image/jpeg")
 
     prompt = """
-You are a medical assistant specialized in reading handwritten prescriptions.
-
-Analyze the prescription image and extract all medicines the doctor has written.
-
-Rules:
-- Extract only medicines, ignore doctor name, patient name, date, and signatures
-- If the handwriting is unclear, make your best guess based on medical knowledge
-- If no medicines are found, return an empty list
-- Do NOT include any explanation, markdown, or extra text — only raw JSON
-
-Return exactly this format:
-{
-    "medicines": [
-        {
-            "name": "medicine name as written",
-            "dosage": "dose amount e.g. 500mg",
-            "frequency": "how many times a day e.g. 1+0+1",
-            "duration": "how many days e.g. 7 days"
-        }
-    ]
-}
+Analyze the prescription image and extract all medicines.
+Extract only medicines. If handwriting is unclear, make your best guess based on medical context.
 """
 
     response = client.models.generate_content(
-        model="gemini-3-flash-preview", contents=[prompt, image]
+        model="gemini-2.0-flash-exp",
+        contents=[prompt, image],
+        config=types.GenerateContentConfig(
+            response_mime_type="application/json",
+            response_schema=ExtractedMedicines,
+        ),
     )
 
-    raw_response = json.loads(response.text or "{}")
-    medicines_data = raw_response.get("medicines", [])
+    if not response.text:
+        return ExtractedMedicines(medicines=[])
 
-    # Build MedicineItem objects from raw data
-    medicines = []
-    for medicine_dict in medicines_data:
-        medicine = MedicineItem(
-            name=medicine_dict.get("name", ""),
-            dosage=medicine_dict.get("dosage"),
-            frequency=medicine_dict.get("frequency"),
-            duration=medicine_dict.get("duration"),
-            confidence=medicine_dict.get("confidence"),
-            raw_line=medicine_dict.get("raw_line"),
-        )
-        medicines.append(medicine)
-
-    return ExtractedMedicines(medicines=medicines)
+    try:
+        data = json.loads(response.text)
+        return ExtractedMedicines(**data)
+    except Exception:
+        # Fallback if structure is slightly different
+        raw_response = json.loads(response.text)
+        medicines_data = raw_response.get("medicines", [])
+        medicines = [MedicineItem(**m) for m in medicines_data]
+        return ExtractedMedicines(medicines=medicines)
