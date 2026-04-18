@@ -3,9 +3,16 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from sqlalchemy.orm import DeclarativeBase
 
 
-DB_URL = "sqlite+aiosqlite:///./dawa.db"
+from config import settings
 
-engine = create_async_engine(DB_URL)
+# Handle Render's 'postgres://' vs SQLAlchemy's 'postgresql+asyncpg://'
+db_url = settings.database_url
+if db_url.startswith("postgres://"):
+    db_url = db_url.replace("postgres://", "postgresql+asyncpg://", 1)
+elif db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+
+engine = create_async_engine(db_url)
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,

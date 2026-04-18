@@ -15,6 +15,7 @@ from models import Prescription
 from schemas import ExtractedMedicines, PrescriptionRecord, PrescriptionsListResponse
 from services.imagekit_service import upload_file
 from services.gemini_service import generate_prescription
+from config import settings
 
 
 requests_counts = {}
@@ -91,7 +92,10 @@ app.add_middleware(RateLimitMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:3000",
+        settings.frontend_url,
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
