@@ -4,6 +4,7 @@ from time import time
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,6 +35,8 @@ async def lifespan(_app: FastAPI):
 app = FastAPI(lifespan=lifespan)
 
 
+
+
 def validate_prescription_image(image: UploadFile, file_bytes: bytes) -> None:
     if not image.filename:
         raise HTTPException(status_code=400, detail="Image filename is required.")
@@ -56,7 +59,7 @@ def validate_prescription_image(image: UploadFile, file_bytes: bytes) -> None:
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        if request.url.path != "/prescription":
+        if request.url.path != "/prescription" or request.method == "OPTIONS":
             return await call_next(request)
         client_ip = request.client.host if request.client else "unknown"
         current_time = time()
@@ -69,9 +72,15 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         ]
 
         if len(requests_counts[client_ip]) >= RATE_LIMIT:
+            # Calculate seconds until the oldest request expires
+            oldest_request_time = requests_counts[client_ip][0]
+            retry_after = int(TIME_WINDOW - (current_time - oldest_request_time))
             return JSONResponse(
                 status_code=429,
-                content={"detail": "Too many requests. Please try again later."},
+                content={
+                    "detail": "Too many requests. Please try again later.",
+                    "retry_after": max(1, retry_after)
+                },
             )
         requests_counts[client_ip].append(current_time)
         response = await call_next(request)
@@ -79,6 +88,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
 
 app.add_middleware(RateLimitMiddleware)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 @app.get("/")
