@@ -1,12 +1,14 @@
 from contextlib import asynccontextmanager
 import json
-import asyncio
+from pathlib import Path
 from time import time
 from typing import Annotated
+from uuid import uuid4
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -14,7 +16,6 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from database import Base, engine, get_db
 from models import Prescription
 from schemas import ExtractedMedicines, PrescriptionRecord, PrescriptionsListResponse
-from services.imagekit_service import upload_file
 from services.gemini_service import generate_prescription
 from config import settings
 
@@ -35,8 +36,8 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
-
-
+Path("uploads").mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 def validate_prescription_image(image: UploadFile, file_bytes: bytes) -> None:
@@ -57,6 +58,23 @@ def validate_prescription_image(image: UploadFile, file_bytes: bytes) -> None:
             status_code=413,
             detail="Image size must be 5 MB or less.",
         )
+
+
+def upload_image_local(file_bytes: bytes, file_name: str | None) -> str:
+    uploads_dir = Path("uploads")
+    suffix = Path(file_name).suffix.lower() if file_name else ""
+    if not suffix:
+        suffix = ".jpg"
+
+    stored_name = f"{uuid4().hex}{suffix}"
+    output_path = uploads_dir / stored_name
+
+    try:
+        output_path.write_bytes(file_bytes)
+    except Exception:
+        raise HTTPException(status_code=500, detail="Failed to save uploaded image.")
+
+    return f"/uploads/{stored_name}"
 
 
 class RateLimitMiddleware(BaseHTTPMiddleware):
@@ -81,7 +99,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                 status_code=429,
                 content={
                     "detail": "Too many requests. Please try again later.",
-                    "retry_after": max(1, retry_after)
+                    "retry_after": max(1, retry_after),
                 },
             )
         requests_counts[client_ip].append(current_time)
@@ -116,15 +134,9 @@ async def create_prescription(
 
     file_bytes = await image.read()
     validate_prescription_image(image=image, file_bytes=file_bytes)
+    image_url = "/uploads/img1"
 
-    # Run upload and analysis in parallel
-    image_url, extracted_medicines = await asyncio.gather(
-        upload_file(
-            file_bytes=file_bytes,
-            file_name=image.filename or "prescription.jpg",
-        ),
-        generate_prescription(image_bytes=file_bytes)
-    )
+    extracted_medicines = await generate_prescription(image_bytes=file_bytes)
 
     prescription = Prescription(
         image_url=image_url,
@@ -158,7 +170,6 @@ async def list_prescriptions(
         records.append(
             PrescriptionRecord(
                 id=row.id,
-                image_url=row.image_url,
                 extracted_medicines=ExtractedMedicines(**payload),
                 created_at=row.created_at,
             )

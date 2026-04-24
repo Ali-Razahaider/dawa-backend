@@ -22,7 +22,6 @@ class ExtractedMedicines(BaseModel):
 
 class PrescriptionRecord(BaseModel):
     id: int
-    image_url: str
     extracted_medicines: ExtractedMedicines
     created_at: datetime
 
